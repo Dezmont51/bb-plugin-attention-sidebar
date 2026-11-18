@@ -243,7 +243,7 @@ it("stores project sort independently and records opening an already-read thread
   expect((folderB.getByRole("combobox") as HTMLSelectElement).value).toBe("updated");
 });
 
-it("nests a dragged thread through bb and rejects drops on its own subtree", async () => {
+it("nests under a thread or returns to its project while rejecting invalid drops", async () => {
   const update = vi.fn().mockResolvedValue(undefined);
   const slot = renderSlot(await threadList(), props(), {
     sidebarThreads: { status: "ready", threads, projects },
@@ -270,6 +270,22 @@ it("nests a dragged thread through bb and rejects drops on its own subtree", asy
   fireEvent.keyDown(document, { key: "Escape" });
   pointer(row("busy"), "pointerup", 32);
   expect(update).not.toHaveBeenCalled();
+
+  const project = (id: string) => slot.container.querySelector(`[data-project-drop-target="${id}"]`)!;
+  const dragOntoProject = (threadId: string, projectId: string, highlighted: boolean) => {
+    start(threadId);
+    pointer(project(projectId), "pointermove", 32);
+    expect(project(projectId).hasAttribute("data-nest-target")).toBe(highlighted);
+    pointer(project(projectId), "pointerup", 32);
+  };
+
+  dragOntoProject("a-child", "proj_b", false);
+  dragOntoProject("a-root", "proj_a", false);
+  expect(update).not.toHaveBeenCalled();
+  dragOntoProject("a-child", "proj_a", true);
+  expect(update).toHaveBeenCalledExactlyOnceWith({ threadId: "a-child", parentThreadId: null });
+  await Promise.resolve();
+  update.mockClear();
 
   start("a-child");
   pointer(row("busy"), "pointermove", 32);

@@ -203,7 +203,7 @@ export function AttentionThreadList({
             project={projectLookup(row.thread.projectId)}
             onNavigate={handleNavigate}
             startNesting={nesting.start}
-            isDropTarget={nesting.targetId === row.thread.id}
+            isDropTarget={nesting.target?.kind === "thread" && nesting.target.id === row.thread.id}
           />
         </div>
       );
@@ -239,12 +239,15 @@ export function AttentionThreadList({
             const key = collapsedStorageKey(folder.projectId);
             const collapsed = isFolderCollapsed(flags.get(key), folder.projectId, activeProjectId);
             const listId = `attention-sidebar-folder-${folder.projectId}`;
+            const isDropTarget = nesting.target?.kind === "project" && nesting.target.id === folder.projectId;
             return (
               <div key={folder.projectId} data-folder={folder.projectId} className="flex flex-col">
                 <div className="flex items-center">
                   <button
                     type="button"
-                    className={headerButtonClass}
+                    className={isDropTarget ? `${headerButtonClass} ring-2 ring-inset ring-sidebar-ring` : headerButtonClass}
+                    data-project-drop-target={folder.projectId}
+                    data-nest-target={isDropTarget ? "" : undefined}
                     aria-expanded={!collapsed}
                     aria-controls={listId}
                     onClick={() => flags.set(key, !collapsed)}
@@ -294,7 +297,7 @@ export function AttentionThreadList({
                           project={null}
                           onNavigate={handleNavigate}
                           startNesting={nesting.start}
-                          isDropTarget={nesting.targetId === row.thread.id}
+                          isDropTarget={nesting.target?.kind === "thread" && nesting.target.id === row.thread.id}
                         />
                       </div>
                     ))}

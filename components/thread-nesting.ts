@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { canReparentThread } from "../lib/model";
+import { canReparentThread, isThreadVisible } from "../lib/model";
 
 const DRAG_DISTANCE = 6;
+
+type ThreadDropTarget = { kind: "thread" | "project"; id: string };
 
 function suppressDragClick() {
   const guard = new AbortController();
@@ -23,7 +25,7 @@ export function useThreadNesting(threads: readonly PluginSidebarThread[]) {
   const threadsById = useRef(byId);
   const gesture = useRef<AbortController | null>(null);
   const saving = useRef(false);
-  const [targetId, setTargetId] = useState<string | null>(null);
+  const [target, setTarget] = useState<ThreadDropTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,12 +34,12 @@ export function useThreadNesting(threads: readonly PluginSidebarThread[]) {
 
   useEffect(() => () => gesture.current?.abort(), []);
 
-  const reparent = useCallback(async (threadId: string, parentThreadId: string) => {
+  const reparent = useCallback(async (threadId: string, parentThreadId: string | null) => {
     saving.current = true;
     try {
       await sdk.threads.update({ threadId, parentThreadId });
     } catch {
-      setError("Не удалось вложить тред. Попробуйте ещё раз.");
+      setError("Не удалось изменить вложенность треда. Попробуйте ещё раз.");
     } finally {
       saving.current = false;
     }
@@ -59,18 +61,26 @@ export function useThreadNesting(threads: readonly PluginSidebarThread[]) {
     const options = { signal: drag.signal };
     let moved = false;
 
-    const resolveParent = (target: EventTarget | null) => {
-      if (!(target instanceof Element) || !list.contains(target)) return null;
-      const candidate = target.closest<HTMLElement>("[data-thread-row]")?.dataset.threadRow;
-      return candidate && canReparentThread(threadsById.current, threadId, candidate)
-        ? candidate
-        : null;
+    const resolveTarget = (element: EventTarget | null): ThreadDropTarget | null => {
+      if (!(element instanceof Element) || !list.contains(element)) return null;
+      const threads = threadsById.current;
+      const parentId = element.closest<HTMLElement>("[data-thread-row]")?.dataset.threadRow;
+      if (parentId && canReparentThread(threads, threadId, parentId)) {
+        return { kind: "thread", id: parentId };
+      }
+
+      const projectId = element.closest<HTMLElement>("[data-project-drop-target]")?.dataset.projectDropTarget;
+      const source = threads.get(threadId);
+      if (source && source.parentThreadId !== null && source.projectId === projectId && isThreadVisible(source)) {
+        return { kind: "project", id: projectId };
+      }
+      return null;
     };
 
     const end = () => {
       drag.abort();
       gesture.current = null;
-      setTargetId(null);
+      setTarget(null);
       if (moved) suppressDragClick();
     };
 
@@ -81,13 +91,16 @@ export function useThreadNesting(threads: readonly PluginSidebarThread[]) {
       }
       if (!moved) setError(null);
       moved = true;
-      setTargetId(resolveParent(move.target));
+      const next = resolveTarget(move.target);
+      setTarget((current) => current?.kind === next?.kind && current?.id === next?.id ? current : next);
     }, options);
     window.addEventListener("pointerup", (up) => {
       if (up.pointerId !== pointerId) return;
-      const parentId = moved ? resolveParent(up.target) : null;
+      const destination = moved ? resolveTarget(up.target) : null;
       end();
-      if (parentId !== null) void reparent(threadId, parentId);
+      if (destination !== null) {
+        void reparent(threadId, destination.kind === "thread" ? destination.id : null);
+      }
     }, options);
     window.addEventListener("pointercancel", (cancel) => {
       if (cancel.pointerId === pointerId) end();
@@ -99,7 +112,7 @@ export function useThreadNesting(threads: readonly PluginSidebarThread[]) {
     window.addEventListener("blur", end, options);
   }, [reparent]);
 
-  return { start, targetId, error };
+  return { start, target, error };
 }
 
 export type StartThreadNesting = ReturnType<typeof useThreadNesting>["start"];
