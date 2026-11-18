@@ -172,6 +172,7 @@ export interface FolderRow<T extends SidebarThreadInput> {
   thread: T;
   /** Indentation level: 0 for a root, 1 for its child, and so on. */
   depth: number;
+  hasChildren: boolean;
   /** Set when the thread is a child shown as a root (its parent is elsewhere). */
   parentTitle: string | null;
 }
@@ -385,12 +386,14 @@ export function buildSidebarModel<T extends SidebarThreadInput>({
     };
     const rows: FolderRow<T>[] = [];
     const emit = (thread: T, depth: number) => {
+      const children = childrenOf.get(thread.id) ?? [];
       rows.push({
         thread,
         depth,
+        hasChildren: children.length > 0,
         parentTitle: depth === 0 ? (parentOf(thread)?.displayTitle ?? null) : null,
       });
-      for (const child of (childrenOf.get(thread.id) ?? []).sort(compare)) {
+      for (const child of children.sort(compare)) {
         emit(child, depth + 1);
       }
     };
@@ -416,6 +419,20 @@ export function buildSidebarModel<T extends SidebarThreadInput>({
   );
 
   return { attention, working, pinned, folders, visibleCount: visible.length };
+}
+
+export function visibleFolderRows<T extends SidebarThreadInput>(
+  rows: readonly FolderRow<T>[],
+  isCollapsed: (threadId: string) => boolean,
+): FolderRow<T>[] {
+  const visible: FolderRow<T>[] = [];
+  let collapsedDepth = Infinity;
+  for (const row of rows) {
+    if (row.depth > collapsedDepth) continue;
+    visible.push(row);
+    collapsedDepth = row.hasChildren && isCollapsed(row.thread.id) ? row.depth : Infinity;
+  }
+  return visible;
 }
 
 /** Every thread id in display order, for checking the "exactly once" rule. */

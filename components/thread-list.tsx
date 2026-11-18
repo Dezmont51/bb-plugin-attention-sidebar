@@ -11,6 +11,7 @@ import {
   folderOfThread,
   isFolderCollapsed,
   isProjectSort,
+  visibleFolderRows,
   PROJECT_SORT_LABELS,
   type ProjectFolder,
   type TopRow,
@@ -29,6 +30,8 @@ const BLOCK_TITLES: Record<BlockId, string> = {
 };
 
 type TopRowProject = { id: string; name: string; isPersonal: boolean };
+
+const threadStorageKey = (threadId: string) => `attention-sidebar:collapsed:thread:${threadId}`;
 
 const blockStorageKey = (block: BlockId) => `attention-sidebar:collapsed:block:${block}`;
 
@@ -141,6 +144,11 @@ export function AttentionThreadList({
   const { status, threads, projects } = useSidebarThreads();
   const frozen = useFrozenActiveThread(activeThreadId, threads);
   const flags = useStoredFlags();
+  const { get, set } = flags;
+  const isBranchCollapsed = (threadId: string) => get(threadStorageKey(threadId)) ?? false;
+  const toggleBranch = useCallback((threadId: string, collapsed: boolean) => {
+    set(threadStorageKey(threadId), collapsed);
+  }, [set]);
   const { sortForProject, setProjectSort, openedAt } = useProjectSorting(activeThreadId);
   const nesting = useThreadNesting(threads);
 
@@ -286,7 +294,7 @@ export function AttentionThreadList({
                 </div>
                 {collapsed ? null : (
                   <div id={listId} role="list" className="flex flex-col gap-px">
-                    {folder.rows.map((row) => (
+                    {visibleFolderRows(folder.rows, isBranchCollapsed).map((row) => (
                       <div role="listitem" key={row.thread.id}>
                         <ThreadRow
                           thread={row.thread}
@@ -298,6 +306,8 @@ export function AttentionThreadList({
                           onNavigate={handleNavigate}
                           startNesting={nesting.start}
                           isDropTarget={nesting.target?.kind === "thread" && nesting.target.id === row.thread.id}
+                          branchCollapsed={row.hasChildren ? isBranchCollapsed(row.thread.id) : undefined}
+                          onToggleBranch={toggleBranch}
                         />
                       </div>
                     ))}

@@ -58,6 +58,9 @@ export interface ThreadRowProps {
   onNavigate: () => void;
   startNesting: StartThreadNesting;
   isDropTarget: boolean;
+  /** Undefined when the row has no children displayed in its folder. */
+  branchCollapsed?: boolean;
+  onToggleBranch?: (threadId: string, collapsed: boolean) => void;
 }
 
 /** The fields bb's thread menu reads, from a sidebar thread. */
@@ -153,6 +156,8 @@ export const ThreadRow = memo(function ThreadRow({
   onNavigate,
   startNesting,
   isDropTarget,
+  branchCollapsed,
+  onToggleBranch,
 }: ThreadRowProps) {
   const now = useNow();
   const shortcut = useSidebarThreadShortcut(thread.id);
@@ -218,6 +223,22 @@ export const ThreadRow = memo(function ThreadRow({
             <StatusGlyphs thread={thread} reason={reason} />
           </span>
         </a>
+        {branchCollapsed !== undefined && onToggleBranch ? (
+          <button
+            type="button"
+            aria-expanded={!branchCollapsed}
+            aria-label={`${branchCollapsed ? "Развернуть" : "Свернуть"} дочерние треды «${title}»`}
+            onClick={() => onToggleBranch(thread.id, !branchCollapsed)}
+            className="absolute top-0 flex h-full w-[18px] items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            style={{ left: `${depth * 14 - 10}px` }}
+          >
+            <Icon
+              name="ChevronRight"
+              aria-hidden
+              className={cx("size-3 transition-transform duration-150", !branchCollapsed && "rotate-90")}
+            />
+          </button>
+        ) : null}
         <ThreadActionsMenu
           thread={actionTarget}
           align="start"

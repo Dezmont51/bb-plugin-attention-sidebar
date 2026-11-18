@@ -74,7 +74,7 @@ describe("thread list slot", () => {
     // Folders: the active project's is open, the other one is collapsed.
     const folderA = slot.container.querySelector('[data-folder="proj_a"]') as HTMLElement;
     const folderB = slot.container.querySelector('[data-folder="proj_b"]') as HTMLElement;
-    expect(within(folderA).getByRole("button", { expanded: true })).toBeTruthy();
+    expect(within(folderA).getByRole("button", { name: /veber-writing/, expanded: true })).toBeTruthy();
     expect(within(folderB).getByRole("button", { expanded: false })).toBeTruthy();
     expect(within(folderA).getAllByRole("link").map((a) => a.textContent)).toEqual([
       expect.stringContaining("Корень"),
@@ -292,4 +292,41 @@ it("nests under a thread or returns to its project while rejecting invalid drops
   pointer(row("busy"), "pointerup", 32);
   expect(update).toHaveBeenCalledExactlyOnceWith({ threadId: "a-child", parentThreadId: "busy" });
   expect(row("busy").hasAttribute("data-nest-target")).toBe(false);
+});
+
+it("keeps branch visibility independent across sidebar mounts", async () => {
+  const list = await threadList();
+  const entries = [
+    ...threads,
+    makeThread({ id: "a-grandchild", parentThreadId: "a-child" }),
+    makeThread({ id: "second-root" }),
+    makeThread({ id: "second-child", parentThreadId: "second-root" }),
+    makeThread({ id: "needs-reply", parentThreadId: "a-root", hasPendingInteraction: true }),
+  ];
+  const options = { sidebarThreads: { status: "ready" as const, threads: entries, projects } };
+  const onNavigate = vi.fn();
+  const slot = renderSlot(list, props({ onNavigate }), options);
+  const row = (container: HTMLElement, id: string) =>
+    container.querySelector(`[data-thread-row="${id}"]`);
+  const branch = (container: HTMLElement, id: string) =>
+    within(row(container, id) as HTMLElement).getByRole("button", { name: /дочерние треды/ });
+
+  fireEvent.click(branch(slot.container, "a-child"));
+  expect(row(slot.container, "a-grandchild")).toBeNull();
+  expect(row(slot.container, "a-child")).not.toBeNull();
+  fireEvent.click(branch(slot.container, "a-root"));
+  expect(row(slot.container, "a-child")).toBeNull();
+  expect(row(slot.container, "second-child")).not.toBeNull();
+  expect(row(slot.container, "needs-reply")?.closest('[data-block="attention"]')).not.toBeNull();
+  expect(onNavigate).not.toHaveBeenCalled();
+  slot.lifecycle.unmount();
+
+  const reopened = renderSlot(list, props(), options);
+  expect(branch(reopened.container, "a-root").getAttribute("aria-expanded")).toBe("false");
+  expect(branch(reopened.container, "second-root").getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(branch(reopened.container, "a-root"));
+  expect(branch(reopened.container, "a-child").getAttribute("aria-expanded")).toBe("false");
+  expect(row(reopened.container, "a-grandchild")).toBeNull();
+  fireEvent.click(branch(reopened.container, "a-child"));
+  expect(row(reopened.container, "a-grandchild")).not.toBeNull();
 });
