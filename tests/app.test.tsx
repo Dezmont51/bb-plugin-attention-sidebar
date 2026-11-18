@@ -202,10 +202,10 @@ describe("thread list slot", () => {
     });
     const row = slot.container.querySelector('[data-thread-row="q"]') as HTMLElement;
     const trailing = row.querySelector("kbd")!.parentElement!;
-    // The trailing group leaves room for the menu and the drag handle.
-    expect(trailing.className).toContain("group-hover/row:mr-11");
-    expect(trailing.className).toContain("group-focus-within/row:mr-11");
-    expect(trailing.className).toContain("group-has-[[data-state=open]]/row:mr-11");
+    // The trailing group leaves room for the menu.
+    expect(trailing.className).toContain("group-hover/row:mr-6");
+    expect(trailing.className).toContain("group-focus-within/row:mr-6");
+    expect(trailing.className).toContain("group-has-[[data-state=open]]/row:mr-6");
     expect(trailing.className).not.toContain("invisible");
     expect(row.querySelector("kbd")!.textContent).toBe("⌘1");
   });
@@ -250,22 +250,30 @@ it("nests a dragged thread through bb and rejects drops on its own subtree", asy
     sdk: { threads: { update } },
   });
   const row = (id: string) => slot.container.querySelector(`[data-thread-row="${id}"]`)!;
-  const drag = (id: string) => {
-    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn() };
-    fireEvent.dragStart(row(id).querySelector("[draggable=true]")!, { dataTransfer });
-    return { dataTransfer };
+  const pointer = (target: Element, type: string, clientY: number) => {
+    const event = new MouseEvent(type, { bubbles: true, clientY });
+    fireEvent(target, Object.assign(event, { pointerId: 1, pointerType: "mouse" }));
   };
 
-  const rejected = drag("a-root");
-  fireEvent.dragOver(row("a-child"), rejected);
+  const start = (id: string) => pointer(row(id).querySelector("a")!, "pointerdown", 0);
+  start("a-root");
+  pointer(row("a-child"), "pointermove", 32);
   expect(row("a-child").hasAttribute("data-nest-target")).toBe(false);
-  fireEvent.drop(row("a-child"), rejected);
+  pointer(row("a-child"), "pointerup", 32);
   expect(update).not.toHaveBeenCalled();
 
-  const accepted = drag("a-child");
-  fireEvent.dragOver(row("busy"), accepted);
+  start("a-child");
+  pointer(row("busy"), "pointermove", 2);
+  expect(row("busy").hasAttribute("data-nest-target")).toBe(false);
+  pointer(row("busy"), "pointermove", 32);
   expect(row("busy").hasAttribute("data-nest-target")).toBe(true);
-  fireEvent.drop(row("busy"), accepted);
+  fireEvent.keyDown(document, { key: "Escape" });
+  pointer(row("busy"), "pointerup", 32);
+  expect(update).not.toHaveBeenCalled();
+
+  start("a-child");
+  pointer(row("busy"), "pointermove", 32);
+  pointer(row("busy"), "pointerup", 32);
   expect(update).toHaveBeenCalledExactlyOnceWith({ threadId: "a-child", parentThreadId: "busy" });
   expect(row("busy").hasAttribute("data-nest-target")).toBe(false);
 });

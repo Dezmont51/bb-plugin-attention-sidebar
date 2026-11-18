@@ -202,7 +202,7 @@ export function AttentionThreadList({
             parentTitle={row.parentTitle}
             project={projectLookup(row.thread.projectId)}
             onNavigate={handleNavigate}
-            nesting={nesting.handlers}
+            startNesting={nesting.start}
             isDropTarget={nesting.targetId === row.thread.id}
           />
         </div>
@@ -216,7 +216,7 @@ export function AttentionThreadList({
   ];
 
   return (
-    <nav aria-label="Треды" className="flex flex-col gap-2 px-2 pb-2">
+    <nav aria-label="Треды" data-attention-thread-list="" className="flex flex-col gap-2 px-2 pb-2">
       {nesting.error === null ? null : <p role="alert" className="px-2 text-xs text-destructive">{nesting.error}</p>}
       {blocks.map(({ id, rows }) =>
         rows.length === 0 ? null : (
@@ -293,7 +293,7 @@ export function AttentionThreadList({
                           parentTitle={row.parentTitle}
                           project={null}
                           onNavigate={handleNavigate}
-                          nesting={nesting.handlers}
+                          startNesting={nesting.start}
                           isDropTarget={nesting.targetId === row.thread.id}
                         />
                       </div>
