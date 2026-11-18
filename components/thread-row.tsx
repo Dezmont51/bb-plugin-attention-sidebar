@@ -15,6 +15,7 @@ import {
 import type { AttentionReason } from "../lib/model";
 import { formatRelativeTime } from "../lib/time";
 import { useNow } from "./hooks";
+import type { ThreadNestingHandlers } from "./thread-nesting";
 import { ProjectAvatar } from "./project-avatar";
 
 const REASON_GLYPH: Record<
@@ -55,6 +56,8 @@ export interface ThreadRowProps {
   /** Project avatar for top-block rows; null in project folders. */
   project: { id: string; name: string; isPersonal: boolean } | null;
   onNavigate: () => void;
+  nesting: ThreadNestingHandlers;
+  isDropTarget: boolean;
 }
 
 /** The fields bb's thread menu reads, from a sidebar thread. */
@@ -148,6 +151,8 @@ export const ThreadRow = memo(function ThreadRow({
   parentTitle,
   project,
   onNavigate,
+  nesting,
+  isDropTarget,
 }: ThreadRowProps) {
   const now = useNow();
   const shortcut = useSidebarThreadShortcut(thread.id);
@@ -161,10 +166,15 @@ export const ThreadRow = memo(function ThreadRow({
       <div
         data-thread-row={thread.id}
         data-active={isActive ? "true" : undefined}
+        data-nest-target={isDropTarget ? "" : undefined}
+        onDragOver={(event) => nesting.over(event, thread.id)}
+        onDragLeave={(event) => nesting.leave(event, thread.id)}
+        onDrop={(event) => void nesting.drop(event, thread.id)}
         className={cx(
           "group/row relative flex w-full items-center rounded-md text-sm text-sidebar-foreground transition-colors",
           "h-[var(--bb-sidebar-row-height)] max-md:pointer-coarse:h-[var(--bb-sidebar-row-height-coarse)]",
           "has-[[data-state=open]]:bg-sidebar-accent",
+          isDropTarget && "ring-2 ring-inset ring-sidebar-ring",
           isActive
             ? "bg-state-active"
             : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -173,6 +183,7 @@ export const ThreadRow = memo(function ThreadRow({
         <a
           {...splitProps}
           href={thread.href}
+          draggable={false}
           data-sidebar-thread-shortcut-target=""
           data-sidebar-thread-id={thread.id}
           aria-current={isActive ? "page" : undefined}
@@ -195,8 +206,8 @@ export const ThreadRow = memo(function ThreadRow({
               </span>
             ) : null}
           </span>
-          {/* Shifts left on hover/focus/open to make room for the «⋯» button. */}
-          <span className="flex shrink-0 items-center gap-2 group-hover/row:mr-6 group-focus-within/row:mr-6 group-has-[[data-state=open]]/row:mr-6">
+          {/* Shifts left to make room for the drag handle and the «⋯» button. */}
+          <span className="flex shrink-0 items-center gap-2 group-hover/row:mr-11 group-focus-within/row:mr-11 group-has-[[data-state=open]]/row:mr-11">
             {shortcut !== null ? (
               <kbd className="pointer-events-none shrink-0 rounded-sm bg-state-hover px-1.5 py-0.5 font-sans text-xs leading-none text-subtle-foreground">
                 {shortcut.label}
@@ -207,6 +218,15 @@ export const ThreadRow = memo(function ThreadRow({
             <StatusGlyphs thread={thread} reason={reason} />
           </span>
         </a>
+        <span
+          draggable
+          onDragStart={(event) => nesting.start(event, thread.id)}
+          onDragEnd={nesting.end}
+          title="Перетащить на другой тред"
+          className="absolute right-7 top-1/2 hidden size-5 -translate-y-1/2 cursor-grab select-none items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent group-hover/row:flex pointer-coarse:hidden"
+        >
+          <span aria-hidden>⠿</span>
+        </span>
         <ThreadActionsMenu
           thread={actionTarget}
           align="start"

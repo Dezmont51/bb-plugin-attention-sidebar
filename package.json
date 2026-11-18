@@ -1,11 +1,11 @@
 {
   "name": "bb-plugin-attention-sidebar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Puts every thread that is waiting on you, from all projects, at the top of the bb sidebar.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nosenss/bb-plugin-attention-sidebar.git"
+    "url": "https://github.com/Dezmont51/bb-plugin-attention-sidebar.git"
   },
   "type": "module",
   "engines": {

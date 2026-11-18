@@ -202,11 +202,70 @@ describe("thread list slot", () => {
     });
     const row = slot.container.querySelector('[data-thread-row="q"]') as HTMLElement;
     const trailing = row.querySelector("kbd")!.parentElement!;
-    // The trailing group shifts away from the button on hover/focus/open.
-    expect(trailing.className).toContain("group-hover/row:mr-6");
-    expect(trailing.className).toContain("group-focus-within/row:mr-6");
-    expect(trailing.className).toContain("group-has-[[data-state=open]]/row:mr-6");
+    // The trailing group leaves room for the menu and the drag handle.
+    expect(trailing.className).toContain("group-hover/row:mr-11");
+    expect(trailing.className).toContain("group-focus-within/row:mr-11");
+    expect(trailing.className).toContain("group-has-[[data-state=open]]/row:mr-11");
     expect(trailing.className).not.toContain("invisible");
     expect(row.querySelector("kbd")!.textContent).toBe("⌘1");
   });
+});
+
+it("stores project sort independently and records opening an already-read thread", async () => {
+  const list = await threadList();
+  const entries = [
+    makeThread({ id: "newer", title: "Я", updatedAt: T0 }),
+    makeThread({ id: "opened", title: "Б", createdAt: T0 - 150_000, updatedAt: T0 - 100_000 }),
+    makeThread({ id: "sibling", title: "А", updatedAt: T0 - 200_000 }),
+    makeThread({ id: "child", parentThreadId: "newer", title: "А", updatedAt: T0 + 100_000 }),
+    makeThread({ id: "other", projectId: "proj_b" }),
+  ];
+  const options = { sidebarThreads: { status: "ready" as const, threads: entries, projects } };
+  const slot = renderSlot(list, props({ activeThreadId: "opened" }), options);
+  const folder = within(slot.container.querySelector('[data-folder="proj_a"]') as HTMLElement);
+  const sort = folder.getByRole("combobox");
+  const ids = () => folder.getAllByRole("link").map((link) => link.getAttribute("data-sidebar-thread-id"));
+
+  expect(ids()).toEqual(["newer", "child", "opened", "sibling"]);
+  fireEvent.change(sort, { target: { value: "opened" } });
+  expect(ids()).toEqual(["opened", "newer", "child", "sibling"]);
+  fireEvent.change(sort, { target: { value: "created" } });
+  expect(ids()).toEqual(["opened", "newer", "child", "sibling"]);
+  fireEvent.change(sort, { target: { value: "title" } });
+  expect(ids()).toEqual(["sibling", "opened", "newer", "child"]);
+  slot.lifecycle.unmount();
+
+  const reopened = renderSlot(list, props({ activeProjectId: "proj_b" }), options);
+  const folderA = within(reopened.container.querySelector('[data-folder="proj_a"]') as HTMLElement);
+  const folderB = within(reopened.container.querySelector('[data-folder="proj_b"]') as HTMLElement);
+  fireEvent.click(folderA.getByRole("button", { expanded: false }));
+  expect((folderA.getByRole("combobox") as HTMLSelectElement).value).toBe("title");
+  expect((folderB.getByRole("combobox") as HTMLSelectElement).value).toBe("updated");
+});
+
+it("nests a dragged thread through bb and rejects drops on its own subtree", async () => {
+  const update = vi.fn().mockResolvedValue(undefined);
+  const slot = renderSlot(await threadList(), props(), {
+    sidebarThreads: { status: "ready", threads, projects },
+    sdk: { threads: { update } },
+  });
+  const row = (id: string) => slot.container.querySelector(`[data-thread-row="${id}"]`)!;
+  const drag = (id: string) => {
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn() };
+    fireEvent.dragStart(row(id).querySelector("[draggable=true]")!, { dataTransfer });
+    return { dataTransfer };
+  };
+
+  const rejected = drag("a-root");
+  fireEvent.dragOver(row("a-child"), rejected);
+  expect(row("a-child").hasAttribute("data-nest-target")).toBe(false);
+  fireEvent.drop(row("a-child"), rejected);
+  expect(update).not.toHaveBeenCalled();
+
+  const accepted = drag("a-child");
+  fireEvent.dragOver(row("busy"), accepted);
+  expect(row("busy").hasAttribute("data-nest-target")).toBe(true);
+  fireEvent.drop(row("busy"), accepted);
+  expect(update).toHaveBeenCalledExactlyOnceWith({ threadId: "a-child", parentThreadId: "busy" });
+  expect(row("busy").hasAttribute("data-nest-target")).toBe(false);
 });
